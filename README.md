@@ -26,15 +26,16 @@
 > 因此无需修改代码即可放在任意路径下运行。下面以占位符 `<install-root>` 表示该根目录：
 
 ```text
-<install-root>\
+<install-root>\                   # 工作根目录（可选，便于统一存放模型与引擎）
 │
-├── Launch_Web_Manager.bat      # 🚀 Web 管理器一键启动脚本
+├── Launch_Web_Manager.bat      # （可选）放在根目录的启动脚本
 ├── manager_config.json         # 各模型已保存的持久化运行参数（运行时生成）
-├── local_settings.json         # 本机专属设置，如 Comfy Desktop 路径（可选，不会被提交）
+├── local_settings.json         # 本机专属设置（模型/引擎路径、Comfy 路径；不会被提交）
 │
-├── web_manager\                # ← 本仓库：管理器核心程序
+├── web_manager\                # ← 本仓库：管理器核心程序（自包含，可直接克隆运行）
 │   ├── manager.py              # 后端服务（基于 Python 标准库，轻量无第三方依赖）
 │   ├── index.html              # 现代化自适应 WebUI 界面
+│   ├── Launch_Web_Manager.bat  # 🚀 本仓库自带的一键启动脚本
 │   └── README.md               # 本说明文档
 │
 ├── models\                     # GGUF 模型与多模态权重存放目录
@@ -53,7 +54,8 @@
 ## 🚀 快速使用指南
 
 ### 1. 启动管理器
-直接双击根目录下的 **`Launch_Web_Manager.bat`**。
+直接双击本仓库目录下的 **`Launch_Web_Manager.bat`**（若你把仓库放在工作根目录，也可用根目录的启动脚本）。
+它会自动使用同目录的 `manager.py`，优先复用 `.venv` / `venv`，否则回退到系统 `python`。
 启动后终端将显示服务信息，并自动在默认浏览器中打开控制台：
 - **控制台地址**：`http://127.0.0.1:8765`
 
