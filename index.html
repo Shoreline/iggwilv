@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LocalLLM Studio - 模型与推理管理器</title>
+  <style>
+    :root {
+      --bg: #090c15;
+      --card-bg: #121726;
+      --card-hover: #171d30;
+      --border: #212940;
+      --border-focus: #4f6bff;
+      --accent: #4f6bff;
+      --accent-hover: #3d55df;
+      --accent-glow: rgba(79, 107, 255, 0.25);
+      --text: #e2e8f0;
+      --text-muted: #8892b0;
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.25);
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --font-mono: Consolas, Monaco, "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Header */
+    header {
+      background: rgba(18, 23, 38, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0.9rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .logo-icon {
+      font-size: 1.5rem;
+      background: linear-gradient(135deg, #4f6bff, #9333ea);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 800;
+    }
+    .logo-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: #1c2333;
+      border: 1px solid var(--border);
+    }
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #64748b;
+    }
+    .status-badge.running .status-dot {
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+      animation: pulse 1.8s infinite;
+    }
+    .status-badge.starting .status-dot {
+      background: var(--warning);
+      box-shadow: 0 0 10px var(--warning);
+      animation: pulse 1s infinite;
+    }
+    .status-badge.error .status-dot {
+      background: var(--danger);
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      max-width: 1560px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 1.5rem 2rem;
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 1.5rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #cbd5e1;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 0.75rem;
+    }
+
+    /* Model List */
+    .model-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-height: 480px;
+      overflow-y: auto;
+      padding-right: 0.25rem;
+    }
+    .model-item {
+      padding: 0.85rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0f1320;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .model-item:hover {
+      background: var(--card-hover);
+      border-color: #3b4668;
+    }
+    .model-item.active {
+      background: rgba(79, 107, 255, 0.12);
+      border-color: var(--accent);
+      box-shadow: 0 0 14px var(--accent-glow);
+    }
+    .model-name {
+      font-size: 0.9rem;
+      font-weight: 600;
+      word-break: break-all;
+      line-height: 1.35;
+      margin-bottom: 0.4rem;
+    }
+    .model-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .tag {
+      background: #1e2638;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-weight: 500;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .tag.highlight {
+      background: rgba(147, 51, 234, 0.2);
+      color: #c084fc;
+      border-color: rgba(147, 51, 234, 0.3);
+    }
+
+    /* Form Fields */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    input[type="text"], input[type="number"], select {
+      background: #0c0f18;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 0.55rem 0.75rem;
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.85rem;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 0.85rem;
+    }
+
+    /* Preset Buttons */
+    .preset-row {
+      display: flex;
+      gap: 0.4rem;
+      margin-top: 0.25rem;
+    }
+    .preset-btn {
+      flex: 1;
+      padding: 0.25rem 0.5rem;
+      background: #182033;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .preset-btn:hover {
+      background: #232d47;
+      color: var(--text);
+    }
+
+    /* Switches */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 0.75rem;
+      background: #0d111c;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .toggle-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 38px;
+      height: 20px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #242d42;
+      transition: .3s;
+      border-radius: 20px;
+    }
+    .slider:before {
+      position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider { background-color: var(--accent); }
+    input:checked + .slider:before { transform: translateX(18px); }
+
+    /* Action Buttons */
+    .btn {
+      padding: 0.65rem 1.25rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #4f6bff, #3b50df);
+      color: white;
+      box-shadow: 0 4px 14px var(--accent-glow);
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #5b75ff, #455ce9);
+      transform: translateY(-1px);
+    }
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+    .btn-danger:hover:not(:disabled) {
+      background: #dc2626;
+    }
+    .btn-secondary {
+      background: #1e263b;
+      border-color: var(--border);
+      color: var(--text);
+    }
+    .btn-secondary:hover {
+      background: #2a344f;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Terminal Console */
+    .terminal-container {
+      grid-column: 1 / -1;
+      background: #07090f;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .terminal-header {
+      background: #111624;
+      padding: 0.65rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+    .terminal-body {
+      height: 280px;
+      overflow-y: auto;
+      padding: 1rem 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      line-height: 1.5;
+      background: #07090f;
+      color: #cbd5e1;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log-line {
+      margin-bottom: 2px;
+    }
+    .log-line.warn { color: #fbbf24; }
+    .log-line.error { color: #f87171; font-weight: 600; }
+    .log-line.info { color: #38bdf8; }
+    .log-line.success { color: #4ade80; font-weight: 600; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #26314d; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3b4970; }
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(5, 7, 13, 0.82);
+      backdrop-filter: blur(10px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1.5rem;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+      background: #101524;
+      border: 1px solid #2b3652;
+      border-radius: 14px;
+      max-width: 960px;
+      width: 100%;
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px var(--accent-glow);
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 1.25rem 1.75rem;
+      background: #151c30;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.5rem;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      transition: all 0.15s;
+    }
+    .modal-close:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+    .modal-content {
+      padding: 1.5rem 1.75rem;
+      overflow-y: auto;
+      font-size: 0.9rem;
+      line-height: 1.65;
+      color: #cbd5e1;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .help-section {
+      background: #0b0e18;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .help-section-title {
+      font-size: 0.98rem;
+      font-weight: 700;
+      color: #60a5fa;
+      margin-bottom: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 0.5rem;
+    }
+    .param-item {
+      margin-bottom: 1rem;
+    }
+    .param-item:last-child {
+      margin-bottom: 0;
+    }
+    .param-name {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: #e2e8f0;
+      background: #1e263d;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      display: inline-block;
+      margin-bottom: 0.25rem;
+    }
+    .param-desc {
+      color: #94a3b8;
+      font-size: 0.86rem;
+    }
+    .param-tip {
+      color: #38bdf8;
+      font-size: 0.82rem;
+      margin-top: 0.2rem;
+    }
+    .highlight-tip {
+      background: rgba(79, 107, 255, 0.1);
+      border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo-area">
+      <span class="logo-icon">⚡</span>
+      <div class="logo-title">LocalLLM Studio</div>
+    </div>
+    <div class="header-actions">
+      <div id="statusBadge" class="status-badge">
+        <span class="status-dot"></span>
+        <span id="statusText">正在获取状态...</span>
+      </div>
+      <a id="openWebUiBtn" href="http://127.0.0.1:8080" target="_blank" class="btn btn-secondary" style="display: none; padding: 0.4rem 0.9rem; font-size: 0.82rem;">
+        🌐 打开原生 WebUI
+      </a>
+      <button id="helpBtn" class="btn btn-secondary" style="padding: 0.4rem 0.9rem; font-size: 0.82rem; border-color: #3b4566;">
+        📖 参数指南
+      </button>
+      <button id="comfyBtn" class="btn btn-secondary" style="padding: 0.4rem 0.9rem; font-size: 0.82rem;">
+        🎨 启动 Comfy Desktop
+      </button>
+      <button id="settingsBtn" class="btn btn-secondary" style="padding: 0.4rem 0.9rem; font-size: 0.82rem;">
+        ⚙️ 路径设置
+      </button>
+      <button id="refreshBtn" class="btn btn-secondary" style="padding: 0.4rem 0.9rem; font-size: 0.82rem;">
+        🔄 刷新
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Left Column: Models & Engines -->
+    <div class="card">
+      <div class="card-title">
+        <span>📦 已发现的模型 (<span id="modelCount">0</span>)</span>
+        <span id="modelsDirLabel" style="font-size: 0.75rem; color: var(--text-muted);">目录: models\</span>
+      </div>
+
+      <div id="modelList" class="model-list">
+        <div style="color: var(--text-muted); font-size: 0.85rem; padding: 1rem; text-align: center;">加载中...</div>
+      </div>
+
+      <div class="form-group" style="margin-top: 0.5rem;">
+        <label for="engineSelect">⚙️ 关联推理引擎 (Engines)</label>
+        <select id="engineSelect"></select>
+      </div>
+
+      <div class="form-group">
+        <label for="mmprojSelect">👁️ 视觉多模态模块 (MMPROJ)</label>
+        <select id="mmprojSelect"></select>
+      </div>
+    </div>
+
+    <!-- Right Column: Parameters Editor -->
+    <div class="card">
+      <div class="card-title">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <span>🎛️ 模型运行参数设置</span>
+          <span id="presetIndicator" style="font-size: 0.75rem; background: #1c2438; padding: 2px 8px; border-radius: 4px; color: #38bdf8; font-weight: normal;">已内置官方推荐底稿</span>
+        </div>
+        <span id="activeModelLabel" style="font-size: 0.82rem; color: var(--accent); font-weight: 600;">未选择</span>
+      </div>
+
+      <!-- Presets & Context -->
+      <div class="grid-2">
+        <div class="form-group">
+          <label for="contextInput">上下文长度 (Context / -c)</label>
+          <input type="number" id="contextInput" step="1024" value="16384">
+          <div class="preset-row">
+            <button class="preset-btn" onclick="setContext(16384)">16K</button>
+            <button class="preset-btn" onclick="setContext(32768)">32K</button>
+            <button class="preset-btn" onclick="setContext(65536)">64K</button>
+            <button class="preset-btn" onclick="setContext(131072)">128K</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="nglInput">GPU 加速层数 (-ngl)</label>
+          <input type="number" id="nglInput" value="99">
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem;">
+            填 99 代表全部卸载到 RTX 5070 Ti 显存中
+          </div>
+        </div>
+      </div>
+
+      <!-- Sampling Params -->
+      <div class="grid-4">
+        <div class="form-group">
+          <label for="tempInput">温度 (Temperature)</label>
+          <input type="number" id="tempInput" step="0.05" value="0.8">
+        </div>
+        <div class="form-group">
+          <label for="topPInput">Top-P</label>
+          <input type="number" id="topPInput" step="0.01" value="0.95">
+        </div>
+        <div class="form-group">
+          <label for="topKInput">Top-K</label>
+          <input type="number" id="topKInput" step="1" value="40">
+        </div>
+        <div class="form-group">
+          <label for="minPInput">Min-P</label>
+          <input type="number" id="minPInput" step="0.01" value="0.05">
+        </div>
+      </div>
+
+      <!-- Performance switches -->
+      <div class="grid-4">
+        <div class="toggle-row">
+          <span class="toggle-label">Flash Attention</span>
+          <label class="switch">
+            <input type="checkbox" id="flashAttnToggle" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">Jinja 格式化模板</span>
+          <label class="switch">
+            <input type="checkbox" id="jinjaToggle" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">内存锁定 (--mlock)</span>
+          <label class="switch">
+            <input type="checkbox" id="mlockToggle" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row" title="针对 Strata 引擎：开启后在模型聊天中自动挂载 DuckDuckGo 搜索与网页抓取 MCP 工具">
+          <span class="toggle-label">🌐 联网搜索 (MCP)</span>
+          <label class="switch">
+            <input type="checkbox" id="mcpToggle" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Advanced Grid -->
+      <div class="grid-4">
+        <div class="form-group">
+          <label for="threadsInput">CPU 线程数 (-t)</label>
+          <input type="number" id="threadsInput" value="5">
+        </div>
+        <div class="form-group">
+          <label for="threadsBatchInput">Prompt 批处理线程 (-tb)</label>
+          <input type="number" id="threadsBatchInput" value="6">
+        </div>
+        <div class="form-group">
+          <label for="batchInput">Batch 大小 (-b)</label>
+          <input type="number" id="batchInput" value="512">
+        </div>
+        <div class="form-group">
+          <label for="ubatchInput">uBatch 大小 (-ub)</label>
+          <input type="number" id="ubatchInput" value="128">
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="form-group">
+          <label for="cacheKSelect">K-Cache 量化模式</label>
+          <select id="cacheKSelect">
+            <option value="q4_0">q4_0 (省显存, 推荐)</option>
+            <option value="q8_0">q8_0 (高保真)</option>
+            <option value="f16">f16 (无量化)</option>
+            <option value="default">默认</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="cacheVSelect">V-Cache 量化模式</label>
+          <select id="cacheVSelect">
+            <option value="q4_0">q4_0 (省显存, 推荐)</option>
+            <option value="q8_0">q8_0 (高保真)</option>
+            <option value="f16">f16 (无量化)</option>
+            <option value="default">默认</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="portInput">监听端口 (Port)</label>
+          <input type="number" id="portInput" value="8080">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="extraArgsInput">额外自定义参数 (例如 --n-cpu-moe 999)</label>
+        <input type="text" id="extraArgsInput" placeholder="输入任意附加参数...">
+      </div>
+
+      <!-- Action Panel -->
+      <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.05);">
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+          <input type="checkbox" id="autoComfyCheck">
+          <span style="font-size: 0.85rem; color: var(--text-muted);">启动大模型时同步拉起 ComfyUI Desktop</span>
+        </label>
+
+        <div style="display: flex; gap: 0.75rem;">
+          <button id="resetDefaultsBtn" class="btn btn-secondary" style="border-color: #3b4566;" title="一键恢复该模型的官方推荐最优参数">🔄 恢复推荐配置</button>
+          <button id="saveConfigBtn" class="btn btn-secondary">💾 保存此配置</button>
+          <button id="stopServerBtn" class="btn btn-danger" style="display: none;">🛑 停止服务</button>
+          <button id="startServerBtn" class="btn btn-primary">🚀 启动模型服务</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Full Width Console Terminal -->
+    <div class="terminal-container">
+      <div class="terminal-header">
+        <span>📟 实时运行控制台日志 (llama-server 输出)</span>
+        <div style="display: flex; gap: 0.75rem; align-items: center;">
+          <label style="font-size: 0.75rem; display: flex; align-items: center; gap: 0.35rem; cursor: pointer;">
+            <input type="checkbox" id="autoScrollCheck" checked> 自动滚动
+          </label>
+          <button onclick="clearLogs()" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;">清屏</button>
+        </div>
+      </div>
+      <div id="terminalBody" class="terminal-body">
+        <div class="log-line info">[LocalLLM Studio] 控制台就绪，请选择模型并点击启动。</div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let appData = {
+      models: [],
+      mmproj_list: [],
+      engines: [],
+      configs: {},
+      selectedModel: null,
+      status: {}
+    };
+
+    let logOffset = 0;
+    let logPollTimer = null;
+
+    // Load initial data
+    async function loadData() {
+      try {
+        const res = await fetch('/api/data?t=' + Date.now(), { cache: 'no-store' });
+        const data = await res.json();
+        appData = data;
+
+        const dirLabel = document.getElementById('modelsDirLabel');
+        if (dirLabel && data.models_dir) dirLabel.textContent = '目录: ' + data.models_dir;
+
+        renderEngines();
+        renderMmproj();
+        renderModels();
+        updateStatusBadge(data.status);
+
+        if (data.configured === false) {
+          openSetup(true);
+        } else if (data.last_selected_model) {
+          selectModel(data.last_selected_model);
+        } else if (data.models.length > 0) {
+          selectModel(data.models[0].name);
+        }
+      } catch (err) {
+        console.error("加载数据失败:", err);
+      }
+    }
+
+    function renderModels() {
+      const listEl = document.getElementById('modelList');
+      document.getElementById('modelCount').textContent = appData.models.length;
+      listEl.innerHTML = '';
+
+      if (appData.models.length === 0) {
+        listEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 1rem; text-align: center;">未在 models\\ 目录下检测到 GGUF 模型</div>';
+        return;
+      }
+
+      appData.models.forEach(m => {
+        const item = document.createElement('div');
+        item.className = `model-item ${appData.selectedModel === m.name ? 'active' : ''}`;
+        item.onclick = () => selectModel(m.name);
+
+        const isBonsai = m.name.toLowerCase().includes('bonsai');
+        const isMoE = m.name.toLowerCase().includes('a3b') || m.name.toLowerCase().includes('moe') || m.name.toLowerCase().includes('flash-next');
+
+        item.innerHTML = `
+          <div class="model-name">${m.name}</div>
+          <div class="model-meta">
+            <span class="tag">${m.size_gb} GB</span>
+            ${isBonsai ? '<span class="tag highlight">三值化 Ternary (Prism)</span>' : ''}
+            ${isMoE ? '<span class="tag highlight">MoE 混合专家</span>' : ''}
+          </div>
+        `;
+        listEl.appendChild(item);
+      });
+    }
+
+    function renderEngines() {
+      const el = document.getElementById('engineSelect');
+      el.innerHTML = '';
+      appData.engines.forEach(e => {
+        const opt = document.createElement('option');
+        opt.value = e.name;
+        opt.textContent = e.name + (e.has_server ? '' : ' (未找到可执行文件)');
+        el.appendChild(opt);
+      });
+    }
+
+    function renderMmproj() {
+      const el = document.getElementById('mmprojSelect');
+      el.innerHTML = '<option value="none">无 (纯文本推理)</option>';
+      appData.mmproj_list.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.name;
+        opt.textContent = `${m.name} (${m.size_gb} GB)`;
+        el.appendChild(opt);
+      });
+    }
+
+    function applyConfig(cfg) {
+      if (!cfg) return;
+      if (cfg.engine) document.getElementById('engineSelect').value = cfg.engine;
+      if (cfg.mmproj) document.getElementById('mmprojSelect').value = cfg.mmproj;
+      document.getElementById('contextInput').value = cfg.context || 16384;
+      document.getElementById('nglInput').value = cfg.ngl ?? 99;
+      document.getElementById('tempInput').value = cfg.temp ?? 0.8;
+      document.getElementById('topPInput').value = cfg.top_p ?? 0.95;
+      document.getElementById('topKInput').value = cfg.top_k ?? 40;
+      document.getElementById('minPInput').value = cfg.min_p ?? 0.05;
+
+      document.getElementById('flashAttnToggle').checked = cfg.flash_attn !== false;
+      document.getElementById('jinjaToggle').checked = cfg.jinja !== false;
+      document.getElementById('mlockToggle').checked = cfg.mlock !== false;
+      document.getElementById('mcpToggle').checked = cfg.enable_mcp !== false;
+
+      document.getElementById('threadsInput').value = cfg.threads || 5;
+      document.getElementById('threadsBatchInput').value = cfg.threads_batch || 6;
+      document.getElementById('batchInput').value = cfg.batch || 512;
+      document.getElementById('ubatchInput').value = cfg.ubatch || 128;
+
+      document.getElementById('cacheKSelect').value = cfg.cache_k || "q4_0";
+      document.getElementById('cacheVSelect').value = cfg.cache_v || "q4_0";
+      document.getElementById('portInput').value = cfg.port || 8080;
+      document.getElementById('extraArgsInput').value = cfg.extra_args || "";
+    }
+
+    function selectModel(modelName) {
+      appData.selectedModel = modelName;
+      document.getElementById('activeModelLabel').textContent = modelName;
+      renderModels();
+
+      const cfg = appData.configs[modelName] || appData.recommended[modelName] || {};
+      applyConfig(cfg);
+    }
+
+    async function restoreRecommended() {
+      if (!appData.selectedModel) return;
+      const rec = appData.recommended[appData.selectedModel];
+      if (!rec) {
+        alert("未找到该模型的推荐配置！");
+        return;
+      }
+      if (confirm(`确定要将当前模型 [${appData.selectedModel}] 的所有参数恢复为官方推荐配置吗？`)) {
+        applyConfig(rec);
+        // Automatically save back to server configs
+        await saveCurrentConfig(true);
+        const body = document.getElementById('terminalBody');
+        const line = document.createElement('div');
+        line.className = 'log-line success';
+        line.textContent = `[Manager] 已成功重置并保存 [${appData.selectedModel}] 为推荐预设！`;
+        body.appendChild(line);
+      }
+    }
+
+    function getFormData() {
+      return {
+        engine: document.getElementById('engineSelect').value,
+        mmproj: document.getElementById('mmprojSelect').value,
+        context: parseInt(document.getElementById('contextInput').value) || 16384,
+        ngl: parseInt(document.getElementById('nglInput').value) || 99,
+        temp: parseFloat(document.getElementById('tempInput').value) || 0.8,
+        top_p: parseFloat(document.getElementById('topPInput').value) || 0.95,
+        top_k: parseInt(document.getElementById('topKInput').value) || 40,
+        min_p: parseFloat(document.getElementById('minPInput').value) || 0.0,
+        flash_attn: document.getElementById('flashAttnToggle').checked,
+        jinja: document.getElementById('jinjaToggle').checked,
+        mlock: document.getElementById('mlockToggle').checked,
+        enable_mcp: document.getElementById('mcpToggle').checked,
+        threads: parseInt(document.getElementById('threadsInput').value) || 5,
+        threads_batch: parseInt(document.getElementById('threadsBatchInput').value) || 6,
+        batch: parseInt(document.getElementById('batchInput').value) || 512,
+        ubatch: parseInt(document.getElementById('ubatchInput').value) || 128,
+        cache_k: document.getElementById('cacheKSelect').value,
+        cache_v: document.getElementById('cacheVSelect').value,
+        port: parseInt(document.getElementById('portInput').value) || 8080,
+        extra_args: document.getElementById('extraArgsInput').value.trim()
+      };
+    }
+
+    function setContext(val) {
+      document.getElementById('contextInput').value = val;
+    }
+
+    async function saveCurrentConfig(silent = false) {
+      if (!appData.selectedModel) return;
+      const params = getFormData();
+      appData.configs[appData.selectedModel] = params;
+      try {
+        await fetch('/api/save_config', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ model: appData.selectedModel, params: params })
+        });
+        if (!silent) {
+          alert('配置已成功保存！');
+        }
+      } catch (err) {
+        if (!silent) {
+          alert('保存失败: ' + err);
+        }
+      }
+    }
+
+    async function startServer() {
+      if (!appData.selectedModel) {
+        alert('请先选择一个模型！');
+        return;
+      }
+      const params = getFormData();
+      const launchComfy = document.getElementById('autoComfyCheck').checked;
+
+      document.getElementById('startServerBtn').disabled = true;
+      document.getElementById('startServerBtn').textContent = '正在启动...';
+
+      try {
+        const res = await fetch('/api/start', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            model: appData.selectedModel,
+            engine: params.engine,
+            params: params,
+            launch_comfy: launchComfy
+          })
+        });
+        const data = await res.json();
+        if (!data.ok) {
+          alert('启动失败: ' + data.error);
+        }
+      } catch (err) {
+        alert('请求失败: ' + err);
+      } finally {
+        document.getElementById('startServerBtn').disabled = false;
+        document.getElementById('startServerBtn').textContent = '🚀 启动模型服务';
+      }
+    }
+
+    async function stopServer() {
+      try {
+        await fetch('/api/stop', { method: 'POST' });
+      } catch (err) {
+        console.error("停止服务失败:", err);
+      }
+    }
+
+    function updateStatusBadge(status) {
+      const badge = document.getElementById('statusBadge');
+      const text = document.getElementById('statusText');
+      const webUiBtn = document.getElementById('openWebUiBtn');
+      const startBtn = document.getElementById('startServerBtn');
+      const stopBtn = document.getElementById('stopServerBtn');
+
+      badge.className = `status-badge ${status.status || 'stopped'}`;
+
+      if (status.status === 'running') {
+        text.textContent = `运行中 (端口: ${status.port}) · 已运行 ${status.uptime}s`;
+        webUiBtn.style.display = 'inline-flex';
+        webUiBtn.href = status.url || `http://127.0.0.1:${status.port}`;
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-flex';
+      } else if (status.status === 'starting') {
+        text.textContent = `正在加载模型权重...`;
+        webUiBtn.style.display = 'none';
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-flex';
+      } else if (status.status === 'error') {
+        text.textContent = `异常退出: ${status.error || 'Check logs'}`;
+        webUiBtn.style.display = 'none';
+        startBtn.style.display = 'inline-flex';
+        stopBtn.style.display = 'none';
+      } else {
+        text.textContent = '已停止 (Idle)';
+        webUiBtn.style.display = 'none';
+        startBtn.style.display = 'inline-flex';
+        stopBtn.style.display = 'none';
+      }
+    }
+
+    // Log Polling
+    async function pollLogs() {
+      try {
+        const res = await fetch(`/api/logs?offset=${logOffset}`);
+        const data = await res.json();
+
+        if (data.status) {
+          updateStatusBadge(data.status);
+        }
+
+        if (data.lines && data.lines.length > 0) {
+          const body = document.getElementById('terminalBody');
+          data.lines.forEach(line => {
+            const div = document.createElement('div');
+            div.className = 'log-line';
+            if (line.includes('error') || line.includes('Error') || line.includes('FAIL')) {
+              div.classList.add('error');
+            } else if (line.includes('warning') || line.includes('WARN')) {
+              div.classList.add('warn');
+            } else if (line.includes('HTTP server listening') || line.includes('all slots are idle')) {
+              div.classList.add('success');
+            } else if (line.includes('[Manager]')) {
+              div.classList.add('info');
+            }
+            div.textContent = line;
+            body.appendChild(div);
+          });
+
+          logOffset += data.lines.length;
+
+          if (document.getElementById('autoScrollCheck').checked) {
+            body.scrollTop = body.scrollHeight;
+          }
+        }
+      } catch (err) {
+        // silent polling error
+      }
+    }
+
+    function clearLogs() {
+      document.getElementById('terminalBody').innerHTML = '';
+    }
+
+    // Help modal handlers
+    function openHelp() {
+      document.getElementById('helpModal').classList.add('active');
+    }
+    function closeHelp() {
+      document.getElementById('helpModal').classList.remove('active');
+    }
+
+    // Path setup modal
+    function openSetup(required) {
+      const modal = document.getElementById('setupModal');
+      if (!modal) return;
+      document.getElementById('modelsDirInput').value = appData.models_dir || '';
+      document.getElementById('enginesDirInput').value = appData.engines_dir || '';
+      document.getElementById('comfyExeInput').value = appData.comfy_exe || '';
+      const hint = document.getElementById('setupHint');
+      const err = document.getElementById('setupError');
+      if (err) { err.style.display = 'none'; err.textContent = ''; }
+      if (hint) {
+        hint.innerHTML = required
+          ? '⚠️ <strong>首次使用</strong>：未检测到有效的模型 / 引擎目录。请填写本机路径后保存；这些路径只会写入本机 <code>local_settings.json</code>，绝不会上传到仓库。'
+          : '填写本机存放 GGUF 模型与推理引擎的目录。路径仅保存在本机 <code>local_settings.json</code>，不会被提交到 Git。';
+      }
+      modal.classList.add('active');
+    }
+    function closeSetup() {
+      const modal = document.getElementById('setupModal');
+      if (modal) modal.classList.remove('active');
+    }
+    async function savePaths() {
+      const models_dir = document.getElementById('modelsDirInput').value.trim();
+      const engines_dir = document.getElementById('enginesDirInput').value.trim();
+      const comfy_exe = document.getElementById('comfyExeInput').value.trim();
+      const err = document.getElementById('setupError');
+      if (err) { err.style.display = 'none'; err.textContent = ''; }
+      try {
+        const res = await fetch('/api/set_paths', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ models_dir, engines_dir, comfy_exe })
+        });
+        const out = await res.json();
+        if (!res.ok || !out.ok) {
+          if (err) { err.textContent = out.error || ('保存失败 (' + res.status + ')'); err.style.display = 'block'; }
+          return;
+        }
+        closeSetup();
+        await loadData();
+      } catch (e) {
+        if (err) { err.textContent = '请求失败: ' + e; err.style.display = 'block'; }
+      }
+    }
+
+    function init() {
+      const helpBtn = document.getElementById('helpBtn');
+      if (helpBtn) helpBtn.onclick = openHelp;
+
+      const modalCloseBtn = document.getElementById('modalCloseBtn');
+      if (modalCloseBtn) modalCloseBtn.onclick = closeHelp;
+
+      const helpModal = document.getElementById('helpModal');
+      if (helpModal) {
+        helpModal.onclick = (e) => {
+          if (e.target === e.currentTarget) closeHelp();
+        };
+      }
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { closeHelp(); closeSetup(); }
+      });
+
+      const startServerBtn = document.getElementById('startServerBtn');
+      if (startServerBtn) startServerBtn.onclick = startServer;
+
+      const stopServerBtn = document.getElementById('stopServerBtn');
+      if (stopServerBtn) stopServerBtn.onclick = stopServer;
+
+      const saveConfigBtn = document.getElementById('saveConfigBtn');
+      if (saveConfigBtn) saveConfigBtn.onclick = () => saveCurrentConfig(false);
+
+      const resetDefaultsBtn = document.getElementById('resetDefaultsBtn');
+      if (resetDefaultsBtn) resetDefaultsBtn.onclick = restoreRecommended;
+
+      const refreshBtn = document.getElementById('refreshBtn');
+      if (refreshBtn) refreshBtn.onclick = loadData;
+
+      const settingsBtn = document.getElementById('settingsBtn');
+      if (settingsBtn) settingsBtn.onclick = () => openSetup(false);
+
+      const setupSaveBtn = document.getElementById('setupSaveBtn');
+      if (setupSaveBtn) setupSaveBtn.onclick = savePaths;
+
+      const setupCloseBtn = document.getElementById('setupCloseBtn');
+      if (setupCloseBtn) setupCloseBtn.onclick = closeSetup;
+
+      const setupModal = document.getElementById('setupModal');
+      if (setupModal) {
+        setupModal.onclick = (e) => {
+          if (e.target === e.currentTarget) closeSetup();
+        };
+      }
+
+      const comfyBtn = document.getElementById('comfyBtn');
+      if (comfyBtn) {
+        comfyBtn.onclick = async () => {
+          try {
+            await fetch('/api/launch_comfy', { method: 'POST' });
+          } catch (e) {
+            alert("启动 Comfy Desktop 失败: " + e);
+          }
+        };
+      }
+
+      loadData();
+      setInterval(pollLogs, 1000);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+
+  <!-- Help Modal -->
+  <div id="helpModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>📖 本地大模型核心运行与参数调优指南</span>
+        </div>
+        <button id="modalCloseBtn" class="modal-close" title="关闭 (Esc)">&times;</button>
+      </div>
+
+      <div class="modal-content">
+        <div class="highlight-tip">
+          💡 <strong>快速提示</strong>：所有参数修改后可点击「💾 保存此配置」长久生效。如果你不确定改了什么导致速度变慢或报错，随时点击「🔄 恢复推荐配置」即可瞬间还原回官方经过严格验证的最优预设！
+        </div>
+
+        <!-- 1. 核心计算与显存参数 -->
+        <div class="help-section">
+          <div class="help-section-title">⚡ 1. 核心计算与显存关键参数（决定能否跑起来与速度）</div>
+          
+          <div class="param-item">
+            <span class="param-name">上下文长度 (Context / -c)</span>
+            <div class="param-desc">模型能够同时记住的短期记忆容量（包含你输入的 Prompt 和模型输出的全部历史）。16384 代表 16K tokens（约 1.2 万汉字或英文单词）。</div>
+            <div class="param-tip">📌 调优建议：上下文开得越大，显存中保存的 KV 缓存就越大。在 16G 显存下，日常对话 16K~32K 最轻快；处理长代码或论文可开 64K。</div>
+          </div>
+
+          <div class="param-item">
+            <span class="param-name">GPU 加速层数 (-ngl / --n-gpu-layers)</span>
+            <div class="param-desc">指定将模型的多少层神经网络放置在 NVIDIA 显卡显存中执行计算。</div>
+            <div class="param-tip">📌 调优建议：填 <code>99</code> 表示“尽最大可能全部塞进显存”（全 GPU 加速）。如果显卡显存不足，引擎会自动将放不下的层留给系统内存与 CPU。</div>
+          </div>
+
+          <div class="param-item">
+            <span class="param-name">Flash Attention (--flash-attn on)</span>
+            <div class="param-desc">开启现代 GPU 硬件级别的闪电注意力计算加速算法。</div>
+            <div class="param-tip">📌 调优建议：强烈建议始终保持开启！在你的 RTX 5070 Ti 上，不仅能减少 30%~50% 的显存占用，还能让首字解析速度提升 1~2 倍。</div>
+          </div>
+
+          <div class="param-item">
+            <span class="param-name">内存锁定 (--mlock)</span>
+            <div class="param-desc">锁定物理内存。防止 Windows 操作系统在内存紧张时把大模型的部分权重偷偷置换到缓慢的硬盘虚拟内存（Pagefile）中。</div>
+            <div class="param-tip">📌 调优建议：建议开启。可避免长时间不用后再次提问时出现突发卡顿。</div>
+          </div>
+
+          <div class="param-item">
+            <span class="param-name">Jinja 对话模板 (--jinja)</span>
+            <div class="param-desc">启用 Hugging Face 标准的 Jinja2 提示词模板解析器，自动适配模型出厂自带的 System Prompt 格式与思考标签 <code>&lt;think&gt;</code>。</div>
+            <div class="param-tip">📌 调优建议：强烈建议开启。关闭可能导致模型分不清“用户说的话”和“自己的回答”。</div>
+          </div>
+        </div>
+
+        <!-- 2. 显存压缩与上下文优化 -->
+        <div class="help-section">
+          <div class="help-section-title">🗜️ 2. KV Cache 显存量化模式（超长文本防爆显存神器）</div>
+          
+          <div class="param-item">
+            <span class="param-name">K-Cache / V-Cache (--cache-type-k, --cache-type-v)</span>
+            <div class="param-desc">控制上下文键值缓存（KV Cache）在显存中的存储精度：</div>
+            <div class="param-desc" style="margin-top: 0.35rem;">
+              • <code>q4_0</code>：4-bit 量化。将上下文占用的显存直接砍半！在长上下文（32K/64K）下极其关键，精度损失几乎不可察觉。<br>
+              • <code>q8_0</code>：8-bit 量化。适度节省显存，保真度高。<br>
+              • <code>f16</code>：原始 16-bit 浮点。无任何压缩，长文本时极容易撑爆 16G 显存。
+            </div>
+            <div class="param-tip">📌 调优建议：日常与长文本推荐选 <code>q4_0</code>；纯短文本且追求极致无损可尝试 <code>default / f16</code>。</div>
+          </div>
+        </div>
+
+        <!-- 3. 生成风格与采样参数 -->
+        <div class="help-section">
+          <div class="help-section-title">🎲 3. 文本生成与采样参数（控制回答的创造力与严谨度）</div>
+
+          <div class="param-item">
+            <span class="param-name">温度 (Temperature / --temp)</span>
+            <div class="param-desc">控制输出文本的随机度与发散性：</div>
+            <div class="param-desc" style="margin-top: 0.35rem;">
+              • <code>0.1 ~ 0.3</code>：极其严谨收敛，适合写代码、数学题、提取结构化 JSON。<br>
+              • <code>0.7 ~ 0.8</code>：标准平衡值，日常对话自然生动。<br>
+              • <code>1.0</code>：思维极其发散活跃（Ternary Bonsai 推荐设为 1.0）。
+            </div>
+          </div>
+
+          <div class="param-item">
+            <span class="param-name">Top-P (核采样 / Nucleus Sampling)</span>
+            <div class="param-desc">只在累积概率达到 P 的最可能词语集合中进行挑选。推荐值 <code>0.9 ~ 0.95</code>。</div>
+          </div>
+
+          <div class="param-item">
+            <span class="param-name">Top-K & Min-P</span>
+            <div class="param-desc">
+              • <strong>Top-K</strong>：每一步强制只保留概率最高的前 K 个候选词（如 40）。<br>
+              • <strong>Min-P</strong>：动态相对截断阈值。自动丢弃概率小于“最佳词概率 × Min-P”的长尾离散低质词。比传统 Top-P 更不易胡言乱语。
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. 硬件线程与批处理 -->
+        <div class="help-section">
+          <div class="help-section-title">⚙️ 4. CPU 线程与 Batch 处理</div>
+
+          <div class="param-item">
+            <span class="param-name">CPU 线程数 (-t) 与 Prompt 线程 (-tb)</span>
+            <div class="param-desc">在有 CPU 协助计算时（如 MoE 架构或部分层回退到 CPU），分配多少个计算线程。</div>
+            <div class="param-tip">📌 调优建议：建议设置为你 CPU 的物理大核心数（通常 5~8），并非越多越好（线程过多反而因频繁上下文切换而降速）。</div>
+          </div>
+
+          <div class="param-item">
+            <span class="param-name">Batch (-b) 与 Micro-Batch (-ub)</span>
+            <div class="param-desc">预填充（读取你的输入提示词）时的批处理块大小。默认 <code>512 / 128</code> 在显存开销与长文档读取速度之间达到了最佳平衡。</div>
+          </div>
+        </div>
+
+        <!-- 5. 视觉多模态与特殊架构 -->
+        <div class="help-section">
+          <div class="help-section-title">👁️ 5. 多模态视觉模块与特殊引擎扩展</div>
+
+          <div class="param-item">
+            <span class="param-name">视觉投影模块 (MMPROJ)</span>
+            <div class="param-desc">图像特征编码器。如果挂载了对应模型的 <code>mmproj-*.gguf</code>，模型就具备“看图”能力，支持在聊天中上传图片并进行分析。</div>
+          </div>
+
+          <div class="param-item">
+            <span class="param-name">额外参数 (Extra Args) 常见用法</span>
+            <div class="param-desc">
+              • <code>--n-cpu-moe 999</code>：针对 MoE 混合专家模型（如 Qwen 35B A3B），开启 CPU 辅助多专家并发加速。<br>
+              • <code>--webui-config-file webui-config.json</code>：载入特定 WebUI 界面预设。<br>
+              • <code>--host 0.0.0.0</code>：允许局域网内其他电脑或手机访问当前模型的 API 接口。
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Path Setup Modal -->
+  <div id="setupModal" class="modal-overlay">
+    <div class="modal-box" style="max-width: 640px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>⚙️ 路径设置（本机专属，不会被上传）</span>
+        </div>
+        <button id="setupCloseBtn" class="modal-close" title="关闭 (Esc)">&times;</button>
+      </div>
+
+      <div class="modal-content">
+        <div class="highlight-tip" id="setupHint">
+          填写本机存放 GGUF 模型与推理引擎的目录。
+        </div>
+
+        <div class="form-group">
+          <label for="modelsDirInput">模型目录 (models)</label>
+          <input type="text" id="modelsDirInput" placeholder="例如 D:/AI/models">
+        </div>
+
+        <div class="form-group">
+          <label for="enginesDirInput">推理引擎目录 (engines)</label>
+          <input type="text" id="enginesDirInput" placeholder="例如 D:/AI/engines">
+        </div>
+
+        <div class="form-group">
+          <label for="comfyExeInput">Comfy Desktop 可执行文件（可选）</label>
+          <input type="text" id="comfyExeInput" placeholder="例如 D:/Comfy Desktop/Comfy Desktop.exe">
+        </div>
+
+        <div id="setupError" style="display: none; color: #f87171; font-size: 0.85rem; margin-top: 0.5rem;"></div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+          <button id="setupSaveBtn" class="btn btn-primary">💾 保存并扫描</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
