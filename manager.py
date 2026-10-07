@@ -20,7 +20,7 @@ if sys.platform == "win32":
 APP_DIR = pathlib.Path(__file__).resolve().parent
 BASE_DIR = APP_DIR.parent
 SETTINGS_FILE = APP_DIR / "local_settings.json"
-CONFIG_FILE = BASE_DIR / "manager_config.json"
+CONFIG_FILE = APP_DIR / "manager_config.json"
 
 # Machine-local default locations (used only until the user picks paths)
 DEFAULT_MODELS_DIR = BASE_DIR / "models"

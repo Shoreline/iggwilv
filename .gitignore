@@ -26,5 +26,6 @@ logs/
 Thumbs.db
 desktop.ini
 
-# Local machine-specific settings (paths, etc.)
+# Local machine-specific settings & runtime data
 local_settings.json
+manager_config.json

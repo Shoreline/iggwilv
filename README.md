@@ -22,31 +22,30 @@
 
 ## 📂 目录结构与协作关系
 
-> 本仓库（`web_manager/`）是管理器核心程序。它默认以**自身所在目录的上一级**作为工作根目录（`BASE_DIR`），
-> 因此无需修改代码即可放在任意路径下运行。下面以占位符 `<install-root>` 表示该根目录：
+> 本仓库（`web_manager/`）是**自包含**的管理器核心程序：克隆到任意位置，双击其中的启动脚本即可运行。
+> 模型与引擎可以放在任意目录（首次启动时在网页里指定），而本机数据（路径设置、模型调优预设）
+> 都写在仓库目录内、已被 `.gitignore` 排除，不会上传。
 
 ```text
-<install-root>\                   # 工作根目录（可选，便于统一存放模型与引擎）
+<install-root>\                   # 任意工作根目录
 │
-├── Launch_Web_Manager.bat      # （可选）放在根目录的启动脚本
-├── manager_config.json         # 各模型已保存的持久化运行参数（运行时生成）
-├── local_settings.json         # 本机专属设置（模型/引擎路径、Comfy 路径；不会被提交）
-│
-├── web_manager\                # ← 本仓库：管理器核心程序（自包含，可直接克隆运行）
-│   ├── manager.py              # 后端服务（基于 Python 标准库，轻量无第三方依赖）
-│   ├── index.html              # 现代化自适应 WebUI 界面
-│   ├── Launch_Web_Manager.bat  # 🚀 本仓库自带的一键启动脚本
-│   └── README.md               # 本说明文档
-│
-├── models\                     # GGUF 模型与多模态权重存放目录
+├── models\                     # GGUF 模型与多模态权重（路径可在网页中指定）
 │   ├── Qwen3.8-Flash-Next-IQ3_S\
 │   ├── Qwen3.6-35B-A3B-...\
 │   └── ...
 │
-└── engines\                    # 各推理引擎程序目录
-    ├── Strata\                 # Strata 引擎及 Python 虚拟环境
-    ├── llama-b10199-...\       # 通用 llama.cpp CUDA 引擎
-    └── llama-prism-...\        # 三值化专有引擎
+├── engines\                    # 各推理引擎程序目录（路径可在网页中指定）
+│   ├── Strata\                 # Strata 引擎及 Python 虚拟环境
+│   ├── llama-b10199-...\       # 通用 llama.cpp CUDA 引擎
+│   └── llama-prism-...\        # 三值化专有引擎
+│
+└── web_manager\                # ← 本仓库（可克隆到任意位置）
+    ├── manager.py              # 后端服务（基于 Python 标准库，轻量无第三方依赖）
+    ├── index.html              # 现代化自适应 WebUI 界面
+    ├── Launch_Web_Manager.bat  # 🚀 一键启动脚本
+    ├── README.md               # 本说明文档
+    ├── local_settings.json     # 本机路径设置（运行时生成，不入库）
+    └── manager_config.json     # 各模型调优预设（运行时生成，不入库）
 ```
 
 ---
