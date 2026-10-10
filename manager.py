@@ -133,7 +133,7 @@ class ProcessManager:
                 if line:
                     clean_line = line.rstrip()
                     self.append_log(clean_line)
-                    if "HTTP server listening" in clean_line or "model loaded" in clean_line:
+                    if "HTTP server listening" in clean_line or "model loaded" in clean_line or clean_line.startswith("ready: http"):
                         with self.lock:
                             if self.status == "starting":
                                 self.status = "running"
@@ -340,9 +340,19 @@ class ProcessManager:
             self.append_log(f"[Manager] Spawning command in {engine_path}:")
             self.append_log(" ".join(cmd))
 
+            # Strata on Windows: pinning the whole ~47 GiB expert arena exhausts Windows' shared
+            # GPU memory pool (~75% of RAM, shared with the iGPU that now drives the display).
+            # Once it is full cudaMemGetInfo reports 0 free and every cudaMalloc fails ("the
+            # embedding buffer failed"). Cap the pinned part; override with the env var if set.
+            proc_env = os.environ.copy()
+            if engine_name.lower() == "strata" and os.name == "nt":
+                proc_env.setdefault("STRATA_ARENA_PIN_GIB", "30")
+                self.append_log(f"[Manager] STRATA_ARENA_PIN_GIB={proc_env['STRATA_ARENA_PIN_GIB']}")
+
             try:
                 self.process = subprocess.Popen(
                     cmd,
+                    env=proc_env,
                     cwd=str(engine_path),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -615,14 +625,20 @@ class RequestHandler(BaseHTTPRequestHandler):
                     offset = int(self.path.split("offset=")[1].split("&")[0])
                 except Exception:
                     pass
+            # Snapshot status FIRST (takes manager.lock, then releases it), THEN the
+            # logs (log_lock). Never hold log_lock while calling get_status(): start()
+            # holds manager.lock and then appends to the log via log_lock, so the
+            # opposite order here deadlocks the whole manager when the UI's log poller
+            # races a Start click.
+            status = manager.get_status()
             with manager.log_lock:
                 total_len = len(manager.logs)
                 lines = manager.logs[offset:] if offset < total_len else []
-                self.send_json({
-                    "lines": lines,
-                    "total": total_len,
-                    "status": manager.get_status()
-                })
+            self.send_json({
+                "lines": lines,
+                "total": total_len,
+                "status": status
+            })
             return
 
         self.send_response(404)
