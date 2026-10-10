@@ -4,6 +4,7 @@ import json
 import time
 import queue
 import pathlib
+import tempfile
 import threading
 import subprocess
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -98,6 +99,7 @@ DEFAULT_SETTINGS = {
     "enable_mcp": True,
     "cache_k": "q8_0",
     "cache_v": "q8_0",
+    "vram_reserve": 256,
     "port": 8080,
     "host": "127.0.0.1",
     "extra_args": ""
@@ -152,6 +154,63 @@ class ProcessManager:
                         self.status = "stopped"
                     self.append_log(f"[Manager] Process terminated (exit code {ret}).")
 
+    # Map the generic web-UI KV-cache choices onto Strata's --kv values.
+    STRATA_KV_MAP = {
+        "q8_0": "int8",
+        "q4_0": "q4_0",
+        "f16": "fp16",
+        "fp16": "fp16",
+        "int8": "int8",
+        "default": None,
+    }
+
+    def _apply_strata_overrides(self, cfg, params):
+        """Map the web UI's generic params onto Strata's engine args so that the
+        context / KV cache / VRAM reserve shown in the UI actually take effect."""
+        args = list(cfg.get("args", []))
+
+        def set_flag(flag, value):
+            if value is None:
+                return
+            if flag in args:
+                i = args.index(flag)
+                if i + 1 < len(args):
+                    args[i + 1] = str(value)
+                else:
+                    args.append(str(value))
+            else:
+                args.extend([flag, str(value)])
+
+        # context -> --max-context
+        try:
+            set_flag("--max-context", int(params.get("context")))
+        except (TypeError, ValueError):
+            pass
+
+        # KV cache -> --kv (q8_0 -> int8, f16 -> fp16; "default" leaves it as-is)
+        kv_src = str(params.get("cache_k") or params.get("cache_v") or "").lower()
+        kv_val = self.STRATA_KV_MAP.get(kv_src)
+        set_flag("--kv", kv_val)
+        self.append_log(
+            f"[Manager] Strata: context={params.get('context')} | --kv={kv_val or '(unchanged)'}"
+        )
+
+        # VRAM reserve -> --vram-reserve-mib
+        try:
+            vram = int(params.get("vram_reserve"))
+            set_flag("--vram-reserve-mib", vram)
+            self.append_log(f"[Manager] Strata: --vram-reserve-mib={vram}")
+        except (TypeError, ValueError):
+            pass
+
+        # MCP toggle -> mcp_servers.web.disabled
+        enable_mcp = params.get("enable_mcp", True)
+        if "mcp_servers" in cfg and isinstance(cfg["mcp_servers"], dict) and "web" in cfg["mcp_servers"]:
+            cfg["mcp_servers"]["web"]["disabled"] = not bool(enable_mcp)
+            self.append_log(f"[Manager] MCP Tools for Strata: {'ENABLED' if enable_mcp else 'DISABLED'}")
+
+        cfg["args"] = args
+
     def start(self, model_name, engine_name, params):
         with self.lock:
             if self.process and self.process.poll() is None:
@@ -178,25 +237,31 @@ class ProcessManager:
                 else:
                     cfg_json = engine_path / "strata-iq3_s.json"
 
-                # Check whether MCP should be enabled or disabled
-                enable_mcp = params.get("enable_mcp", True)
+                if not cfg_json.exists():
+                    self.status = "error"
+                    self.error_msg = f"Strata config not found: {cfg_json}"
+                    return False, self.error_msg
+
+                # Build a runtime config = template JSON + the web UI's overrides,
+                # so the UI's context / KV / VRAM-reserve actually drive Strata
+                # without mutating the hand-tuned template JSON.
                 try:
-                    if cfg_json.exists():
-                        with open(cfg_json, "r", encoding="utf-8") as f:
-                            raw_cfg = json.load(f)
-                        if "mcp_servers" in raw_cfg and "web" in raw_cfg["mcp_servers"]:
-                            raw_cfg["mcp_servers"]["web"]["disabled"] = not bool(enable_mcp)
-                            with open(cfg_json, "w", encoding="utf-8") as f:
-                                json.dump(raw_cfg, f, indent=1, ensure_ascii=False)
-                            self.append_log(f"[Manager] MCP Tools for Strata: {'ENABLED' if enable_mcp else 'DISABLED'}")
+                    with open(cfg_json, "r", encoding="utf-8") as f:
+                        raw_cfg = json.load(f)
+                    self._apply_strata_overrides(raw_cfg, params)
+                    runtime_cfg = pathlib.Path(tempfile.gettempdir()) / f"strata-runtime-{cfg_json.stem}.json"
+                    with open(runtime_cfg, "w", encoding="utf-8") as f:
+                        json.dump(raw_cfg, f, indent=1, ensure_ascii=False)
                 except Exception as e:
-                    self.append_log(f"[Manager] Warning updating MCP toggle in {cfg_json}: {e}")
+                    self.status = "error"
+                    self.error_msg = f"Failed to prepare Strata config: {e}"
+                    return False, self.error_msg
 
                 cmd = [
                     str(strata_py),
                     str(server_py),
                     "--engine", "strata",
-                    "--config", str(cfg_json),
+                    "--config", str(runtime_cfg),
                     "--port", str(self.port)
                 ]
             else:

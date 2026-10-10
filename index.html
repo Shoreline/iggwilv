@@ -628,7 +628,7 @@
             <span class="slider"></span>
           </label>
         </div>
-        <div class="toggle-row" title="针对 Strata 引擎：开启后在模型聊天中自动挂载 DuckDuckGo 搜索与网页抓取 MCP 工具">
+        <div class="toggle-row" id="mcpToggleRow" title="针对 Strata 引擎：开启后在模型聊天中自动挂载 DuckDuckGo 搜索与网页抓取 MCP 工具">
           <span class="toggle-label">🌐 联网搜索 (MCP)</span>
           <label class="switch">
             <input type="checkbox" id="mcpToggle" checked>
@@ -659,7 +659,7 @@
 
       <div class="grid-3">
         <div class="form-group">
-          <label for="cacheKSelect">K-Cache 量化模式</label>
+          <label for="cacheKSelect" id="cacheKLabel">K-Cache 量化模式</label>
           <select id="cacheKSelect">
             <option value="q4_0">q4_0 (省显存, 推荐)</option>
             <option value="q8_0">q8_0 (高保真)</option>
@@ -667,7 +667,7 @@
             <option value="default">默认</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="cacheVGroup">
           <label for="cacheVSelect">V-Cache 量化模式</label>
           <select id="cacheVSelect">
             <option value="q4_0">q4_0 (省显存, 推荐)</option>
@@ -680,6 +680,11 @@
           <label for="portInput">监听端口 (Port)</label>
           <input type="number" id="portInput" value="8080">
         </div>
+      </div>
+
+      <div class="form-group" id="vramReserveGroup" style="display: none;">
+        <label for="vramReserveInput" title="针对 Strata 引擎：预留给系统/其他程序的显存（MiB）。桌面已不在 N 卡上时可调小，把显存让给专家缓存。">VRAM 预留 (MiB, Strata --vram-reserve-mib)</label>
+        <input type="number" id="vramReserveInput" value="256" min="0" step="64">
       </div>
 
       <div class="form-group">
@@ -812,6 +817,17 @@
       });
     }
 
+    function updateEngineFields() {
+      const eng = (document.getElementById('engineSelect').value || '').toLowerCase();
+      const isStrata = eng.includes('strata');
+      const show = (el, on) => { if (el) el.style.display = on ? '' : 'none'; };
+      show(document.getElementById('mcpToggleRow'), isStrata);
+      show(document.getElementById('vramReserveGroup'), isStrata);
+      show(document.getElementById('cacheVGroup'), !isStrata);
+      const kLabel = document.getElementById('cacheKLabel');
+      if (kLabel) kLabel.textContent = isStrata ? 'KV 缓存量化 (Strata --kv)' : 'K-Cache 量化模式';
+    }
+
     function applyConfig(cfg) {
       if (!cfg) return;
       if (cfg.engine) document.getElementById('engineSelect').value = cfg.engine;
@@ -835,8 +851,11 @@
 
       document.getElementById('cacheKSelect').value = cfg.cache_k || "q4_0";
       document.getElementById('cacheVSelect').value = cfg.cache_v || "q4_0";
+      document.getElementById('vramReserveInput').value = (cfg.vram_reserve ?? 256);
       document.getElementById('portInput').value = cfg.port || 8080;
       document.getElementById('extraArgsInput').value = cfg.extra_args || "";
+
+      updateEngineFields();
     }
 
     function selectModel(modelName) {
@@ -887,6 +906,7 @@
         ubatch: parseInt(document.getElementById('ubatchInput').value) || 128,
         cache_k: document.getElementById('cacheKSelect').value,
         cache_v: document.getElementById('cacheVSelect').value,
+        vram_reserve: parseInt(document.getElementById('vramReserveInput').value, 10),
         port: parseInt(document.getElementById('portInput').value) || 8080,
         extra_args: document.getElementById('extraArgsInput').value.trim()
       };
@@ -1119,6 +1139,9 @@
 
       const refreshBtn = document.getElementById('refreshBtn');
       if (refreshBtn) refreshBtn.onclick = loadData;
+
+      const engineSelect = document.getElementById('engineSelect');
+      if (engineSelect) engineSelect.addEventListener('change', updateEngineFields);
 
       const settingsBtn = document.getElementById('settingsBtn');
       if (settingsBtn) settingsBtn.onclick = () => openSetup(false);
