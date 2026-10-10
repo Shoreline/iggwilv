@@ -110,7 +110,7 @@
      - 或在本目录放置 `local_settings.json`：`{ "comfy_exe": "D:/path/to/Comfy Desktop.exe" }`。
    - 三者皆无时会自动探测 `%LOCALAPPDATA%\\Programs\\ComfyUI\\` 下的常见安装位置。
 6. **加大上下文后提示 `no VRAM is left for the expert cache`（显存不足崩溃）？**
-   - **这不是配置没生效，而是显存不够。** Strata 启动时会先给 KV 缓存、MTP 草稿头、视觉编码器等分配显存，剩下的才给「专家缓存」（GPU 上的专家权重槽）；一旦剩余低于最低要求（约 652 MiB）就会启动失败。
+   - **多数情况是显存确实不够；但也可能是 FAQ 第 7 条的 `auto` 误判（先看第 7 条排除）。** Strata 启动时会先给 KV 缓存、MTP 草稿头、视觉编码器等分配显存，剩下的才给「专家缓存」（GPU 上的专家权重槽）；一旦剩余低于最低要求（约 652 MiB）就会启动失败。
    - 真实账本参考（Intel Core Ultra 7 270K + RTX 5070 Ti 16GB；显示器走核显、N 卡全空时；Qwen3.8-Flash-Next IQ3_S）：
 
      | 上下文 / KV | KV 缓存显存 | 留给专家缓存 |
@@ -127,3 +127,8 @@
      4. 在 Strata 配置里加 **`--kv-resident 65536`**（KV 流式：只把一部分 KV 放显存，其余走内存；保持 int8 精度，但解码略慢、多占约 2 GB 内存）。
      5. 把**视觉编码器放到 CPU**（配置里 `vision.gpu: false`），省出 mmproj 占用的显存；代价是看图变慢。
    - 提示：在 Web UI 里对 **Strata** 模型，**「上下文长度 / KV 缓存量化 / VRAM 预留」会真正写入引擎参数**（`--max-context` / `--kv` / `--vram-reserve-mib`），无需手改 JSON。
+7. **Strata 报 `expert cache auto: 0.00 GiB free`，但 `nvidia-smi` 明明显示有空闲显存？**
+   - 这是 **Strata 0.1.40 的 `--expert-cache auto` 的一个 bug**：在「显示器接核显、N 卡不驱动显示」的环境下，引擎自检会把可用显存**误判为 0**，于是算成 0 个专家缓存槽，随后 `the embedding buffer failed` 崩溃。
+   - **佐证**：同一台机、同一份配置，`--expert-cache auto` → `0.00 GiB free -> 0 slots` 后崩；改成固定值 `--expert-cache 1500` → 正常 `ready`。期间 `nvidia-smi`、CUDA（`cudaMemGetInfo`）、NVML 都显示空闲 15 GB，**只有引擎自己算成 0**。
+   - **解决办法：把 `--expert-cache auto` 改成固定槽数**，例如 `--expert-cache 1500`。本项目两个 Strata 配置（`strata-iq3_s.json` / `strata-swift-iq3_xxs.json`）已改为 `1500`；实测 128K + int8 下占用约 3.7 GiB、加载后仍富余约 2.4 GiB。
+   - **调优**：槽数越大，GPU 专家命中率越高、越快，但占显存越多——可自行上下微调，只要加载后留几百 MB 余量即可。若上游修复了 `auto`，改回 `auto` 也行。
