@@ -130,5 +130,5 @@
 7. **Strata 报 `expert cache auto: 0.00 GiB free`，但 `nvidia-smi` 明明显示有空闲显存？**
    - 这是 **Strata 0.1.40 的 `--expert-cache auto` 的一个 bug**：在「显示器接核显、N 卡不驱动显示」的环境下，引擎自检会把可用显存**误判为 0**，于是算成 0 个专家缓存槽，随后 `the embedding buffer failed` 崩溃。
    - **佐证**：同一台机、同一份配置，`--expert-cache auto` → `0.00 GiB free -> 0 slots` 后崩；改成固定值 `--expert-cache 1500` → 正常 `ready`。期间 `nvidia-smi`、CUDA（`cudaMemGetInfo`）、NVML 都显示空闲 15 GB，**只有引擎自己算成 0**。
-   - **解决办法：把 `--expert-cache auto` 改成固定槽数**，例如 `--expert-cache 1500`。本项目两个 Strata 配置（`strata-iq3_s.json` / `strata-swift-iq3_xxs.json`）已改为 `1500`；实测 128K + int8 下占用约 3.7 GiB、加载后仍富余约 2.4 GiB。
+   - **解决办法：把 `--expert-cache auto` 改成固定槽数**。本项目两个 Strata 配置（`strata-iq3_s.json` / `strata-swift-iq3_xxs.json`）当前设为 `2700`；其中 `1500` 是实测验证过的安全下限（128K + int8 下占用约 3.7 GiB、加载后仍富余约 2.4 GiB）。**设得越高 GPU 命中率越高、越快，但显存占用越大——加载后务必看 `strata serve: X MiB of VRAM free` 是否还留几百 MB，避免顶到 WDDM 换页断崖。**
    - **调优**：槽数越大，GPU 专家命中率越高、越快，但占显存越多——可自行上下微调，只要加载后留几百 MB 余量即可。若上游修复了 `auto`，改回 `auto` 也行。
