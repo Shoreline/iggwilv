@@ -81,7 +81,7 @@
 
 | 参数项 | 参数 Flag | 推荐设置 | 说明 |
 | :--- | :--- | :--- | :--- |
-| **上下文长度** | `-c` | 32768 或 65536 | 模型的记忆容量。开得越大，KV 缓存占显存越多 |
+| **上下文长度** | `-c` / `--max-context` | 32768 ~ 131072 | 模型的记忆容量。开得越大，KV 缓存占显存越多（见 FAQ 第 6 条的显存账） |
 | **GPU 加速层数** | `-ngl` | 99 | 全满载入显卡显存计算 |
 | **计算线程** | `-t` | 8 | 匹配 270K 的 8 个高频性能核心 (P-Cores) |
 | **批处理线程** | `-tb` | 16 | 匹配处理 Prompt 阶段的高并发线程数 |
@@ -109,3 +109,21 @@
      - 或设置环境变量 `COMFY_DESKTOP_EXE` 指向 `Comfy Desktop.exe`；
      - 或在本目录放置 `local_settings.json`：`{ "comfy_exe": "D:/path/to/Comfy Desktop.exe" }`。
    - 三者皆无时会自动探测 `%LOCALAPPDATA%\\Programs\\ComfyUI\\` 下的常见安装位置。
+6. **加大上下文后提示 `no VRAM is left for the expert cache`（显存不足崩溃）？**
+   - **这不是配置没生效，而是显存不够。** Strata 启动时会先给 KV 缓存、MTP 草稿头、视觉编码器等分配显存，剩下的才给「专家缓存」（GPU 上的专家权重槽）；一旦剩余低于最低要求（约 652 MiB）就会启动失败。
+   - 真实账本参考（Intel Core Ultra 7 270K + RTX 5070 Ti 16GB；显示器走核显、N 卡全空时；Qwen3.8-Flash-Next IQ3_S）：
+
+     | 上下文 / KV | KV 缓存显存 | 留给专家缓存 |
+     | :--- | :--- | :--- |
+     | 64K / int8 | ~0.9 GB | **8.5 GiB** |
+     | 128K / int8 | ~1.9 GB | 约 7.5 GiB |
+     | 192K / int8 | ~2.8 GB | 6.6 GiB |
+     | 192K / q4_0 | ~1.4 GB | 约 8.0 GiB |
+
+   - 排查与化解，按性价比排序：
+     1. **先确认 N 卡是空的**：`nvidia-smi --query-gpu=memory.used,memory.free --format=csv`（空闲应约 `0 MiB, 15995 MiB`）。**别让浏览器 / 游戏 / 其他 AI 程序占用 N 卡**——最常见的失败原因就是有残留进程占着显存。
+     2. 在 Web UI 把 **「KV 缓存量化」选 `q4_0`**（KV 约减半，省显存最多、最省事）。
+     3. 把**上下文调小**（如 192K → 128K）。
+     4. 在 Strata 配置里加 **`--kv-resident 65536`**（KV 流式：只把一部分 KV 放显存，其余走内存；保持 int8 精度，但解码略慢、多占约 2 GB 内存）。
+     5. 把**视觉编码器放到 CPU**（配置里 `vision.gpu: false`），省出 mmproj 占用的显存；代价是看图变慢。
+   - 提示：在 Web UI 里对 **Strata** 模型，**「上下文长度 / KV 缓存量化 / VRAM 预留」会真正写入引擎参数**（`--max-context` / `--kv` / `--vram-reserve-mib`），无需手改 JSON。
