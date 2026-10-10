@@ -682,6 +682,14 @@
         </div>
       </div>
 
+      <div class="form-group" id="displayGpuGroup" style="display: none;">
+        <label for="displayGpuSelect" title="针对 Strata 引擎：显示器接在哪张卡上。核显方案会限制专家内存区的 pin 大小（STRATA_ARENA_PIN_GIB=43），避免占满 Windows 共享 GPU 内存额度；独显方案使用引擎原有行为（整块 pin）。">显示输出接在 (Strata 内存 pin 方案)</label>
+        <select id="displayGpuSelect">
+          <option value="igpu">核显（限制 pin 至 43 GiB）</option>
+          <option value="dgpu">独显（引擎默认，整块 pin）</option>
+        </select>
+      </div>
+
       <div class="form-group" id="vramReserveGroup" style="display: none;">
         <label for="vramReserveInput" title="针对 Strata 引擎：预留给系统/其他程序的显存（MiB）。桌面已不在 N 卡上时可调小，把显存让给专家缓存。">VRAM 预留 (MiB, Strata --vram-reserve-mib)</label>
         <input type="number" id="vramReserveInput" value="256" min="0" step="64">
@@ -823,6 +831,7 @@
       const show = (el, on) => { if (el) el.style.display = on ? '' : 'none'; };
       show(document.getElementById('mcpToggleRow'), isStrata);
       show(document.getElementById('vramReserveGroup'), isStrata);
+      show(document.getElementById('displayGpuGroup'), isStrata);
       show(document.getElementById('cacheVGroup'), !isStrata);
       const kLabel = document.getElementById('cacheKLabel');
       if (kLabel) kLabel.textContent = isStrata ? 'KV 缓存量化 (Strata --kv)' : 'K-Cache 量化模式';
@@ -852,6 +861,7 @@
       document.getElementById('cacheKSelect').value = cfg.cache_k || "q4_0";
       document.getElementById('cacheVSelect').value = cfg.cache_v || "q4_0";
       document.getElementById('vramReserveInput').value = (cfg.vram_reserve ?? 256);
+      document.getElementById('displayGpuSelect').value = cfg.display_gpu || 'igpu';
       document.getElementById('portInput').value = cfg.port || 8080;
       document.getElementById('extraArgsInput').value = cfg.extra_args || "";
 
@@ -907,6 +917,7 @@
         cache_k: document.getElementById('cacheKSelect').value,
         cache_v: document.getElementById('cacheVSelect').value,
         vram_reserve: parseInt(document.getElementById('vramReserveInput').value, 10),
+        display_gpu: document.getElementById('displayGpuSelect').value,
         port: parseInt(document.getElementById('portInput').value) || 8080,
         extra_args: document.getElementById('extraArgsInput').value.trim()
       };

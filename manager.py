@@ -340,14 +340,20 @@ class ProcessManager:
             self.append_log(f"[Manager] Spawning command in {engine_path}:")
             self.append_log(" ".join(cmd))
 
-            # Strata on Windows: pinning the whole ~47 GiB expert arena exhausts Windows' shared
-            # GPU memory pool (~75% of RAM, shared with the iGPU that now drives the display).
+            # Strata on Windows, display on the iGPU: pinning the whole ~47 GiB expert arena
+            # exhausts Windows' shared GPU memory pool (~46.6 GiB here, also used by the iGPU).
             # Once it is full cudaMemGetInfo reports 0 free and every cudaMalloc fails ("the
-            # embedding buffer failed"). Cap the pinned part; override with the env var if set.
+            # embedding buffer failed"). "igpu" caps the pinned part (43 GiB); "dgpu" keeps the
+            # engine's default behaviour (whole arena pinned).
             proc_env = os.environ.copy()
             if engine_name.lower() == "strata" and os.name == "nt":
-                proc_env.setdefault("STRATA_ARENA_PIN_GIB", "30")
-                self.append_log(f"[Manager] STRATA_ARENA_PIN_GIB={proc_env['STRATA_ARENA_PIN_GIB']}")
+                display_gpu = str(params.get("display_gpu") or "igpu").lower()
+                if display_gpu == "dgpu":
+                    proc_env.pop("STRATA_ARENA_PIN_GIB", None)
+                    self.append_log("[Manager] Strata display=dGPU: engine default pinning (STRATA_ARENA_PIN_GIB unset)")
+                else:
+                    proc_env["STRATA_ARENA_PIN_GIB"] = "43"
+                    self.append_log("[Manager] Strata display=iGPU: STRATA_ARENA_PIN_GIB=43")
 
             try:
                 self.process = subprocess.Popen(
